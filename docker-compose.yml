@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # BACOWR API Service
+  # =============================================================================
+  bacowr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bacowr:latest
+    container_name: bacowr-api
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      # LLM Configuration
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS:-4000}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.7}
+
+      # Storage Configuration
+      - STORAGE_PATH=/app/output
+
+      # API Configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Preflight Configuration
+      - PREFLIGHT_TIMEOUT=${PREFLIGHT_TIMEOUT:-30}
+      - PREFLIGHT_MAX_PARAGRAPHS=${PREFLIGHT_MAX_PARAGRAPHS:-3}
+
+    volumes:
+      # Persist generated articles and data
+      - ./output:/app/output
+
+      # Optional: mount .env file
+      # - ./.env:/app/.env:ro
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+    networks:
+      - bacowr-network
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  bacowr-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  bacowr-output:
+    driver: local
