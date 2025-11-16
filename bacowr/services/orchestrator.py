@@ -42,7 +42,8 @@ class JobOrchestrator:
 
     def __init__(
         self,
-        preflight_engine=None,
+        light_preflight=None,
+        heavy_preflight=None,
         llm_client=None,
         storage=None,
         qa_service=None
@@ -51,21 +52,27 @@ class JobOrchestrator:
         Initialize orchestrator with dependencies.
 
         Args:
-            preflight_engine: Preflight engine instance (T4)
-            llm_client: LLM client instance (T5)
-            storage: Storage layer instance (T6)
-            qa_service: QA service instance (T7)
+            light_preflight: Light preflight engine instance
+            heavy_preflight: Heavy preflight engine instance (v2.0)
+            llm_client: LLM client instance
+            storage: Storage layer instance
+            qa_service: QA service instance
 
         Note:
             All dependencies are optional during development.
-            They will be required once respective modules are implemented.
+            Orchestrator will select appropriate preflight based on job mode.
         """
-        self.preflight_engine = preflight_engine
+        self.light_preflight = light_preflight
+        self.heavy_preflight = heavy_preflight
         self.llm_client = llm_client
         self.storage = storage
         self.qa_service = qa_service
 
-        logger.info("JobOrchestrator initialized")
+        logger.info(
+            f"JobOrchestrator initialized - "
+            f"light_preflight={'yes' if light_preflight else 'no'}, "
+            f"heavy_preflight={'yes' if heavy_preflight else 'no'}"
+        )
 
     # ========================================================================
     # SINGLE JOB EXECUTION
@@ -117,18 +124,36 @@ class JobOrchestrator:
             # ================================================================
             # STEP 2: Run Preflight (research & prompt building)
             # ================================================================
-            logger.info(f"[{job_id}] Starting preflight ({job_input.preflight_mode})")
+            logger.info(f"[{job_id}] Starting preflight ({job_input.preflight_mode.value})")
             job.status = JobStatus.PREFLIGHT_RUNNING
             if self.storage:
                 self.storage.update_job(job)
 
-            if self.preflight_engine:
-                preflight_result = self.preflight_engine.run(job_input)
-                logger.info(f"[{job_id}] Preflight complete")
+            # Select appropriate preflight engine based on mode
+            from bacowr.domain.models import PreflightMode
+
+            if job_input.preflight_mode == PreflightMode.HEAVY:
+                if self.heavy_preflight:
+                    preflight_result = self.heavy_preflight.run(job_input)
+                    logger.info(
+                        f"[{job_id}] Heavy preflight complete - "
+                        f"bridge_type={preflight_result.bridge_type}, "
+                        f"intent_alignment={preflight_result.intent_extension.intent_alignment.overall.value if preflight_result.intent_extension else 'N/A'}"
+                    )
+                else:
+                    logger.warning(f"[{job_id}] Heavy preflight not available - falling back to light")
+                    if self.light_preflight:
+                        preflight_result = self.light_preflight.run(job_input)
+                    else:
+                        preflight_result = self._create_placeholder_preflight(job_input)
             else:
-                # TODO: Remove this placeholder after T4 is implemented
-                logger.warning(f"[{job_id}] Preflight engine not available - using placeholder")
-                preflight_result = self._create_placeholder_preflight(job_input)
+                # Light mode (default)
+                if self.light_preflight:
+                    preflight_result = self.light_preflight.run(job_input)
+                    logger.info(f"[{job_id}] Light preflight complete")
+                else:
+                    logger.warning(f"[{job_id}] Light preflight not available - using placeholder")
+                    preflight_result = self._create_placeholder_preflight(job_input)
 
             job.status = JobStatus.PREFLIGHT_COMPLETE
             if self.storage:

@@ -52,6 +52,79 @@ class QAStatus(str, Enum):
 
 
 # ============================================================================
+# HEAVY PREFLIGHT ENUMS (v2.0)
+# ============================================================================
+
+class BridgeType(str, Enum):
+    """Bridge type for link integration strategy."""
+    STRONG = "strong"  # Direct semantic match
+    PIVOT = "pivot"    # Thematic bridge needed
+    WRAPPER = "wrapper"  # Meta-frame required
+
+
+class SERPIntent(str, Enum):
+    """Primary SERP intent classification."""
+    INFO_PRIMARY = "info_primary"
+    COMMERCIAL_RESEARCH = "commercial_research"
+    TRANSACTIONAL = "transactional"
+    NAVIGATIONAL_BRAND = "navigational_brand"
+    SUPPORT = "support"
+    LOCAL = "local"
+    MIXED = "mixed"
+
+
+class AnchorType(str, Enum):
+    """Anchor text type classification."""
+    EXACT = "exact"
+    PARTIAL = "partial"
+    BRAND = "brand"
+    GENERIC = "generic"
+
+
+class TrustLevel(str, Enum):
+    """Trust source hierarchy levels."""
+    T1_PUBLIC = "T1_public"      # Government, standards
+    T2_ACADEMIC = "T2_academic"  # Universities, research
+    T3_INDUSTRY = "T3_industry"  # Industry orgs, whitepapers
+    T4_MEDIA = "T4_media"        # Reputable news
+
+
+class AlignmentStatus(str, Enum):
+    """Intent alignment status."""
+    ALIGNED = "aligned"
+    PARTIAL = "partial"
+    OFF = "off"
+
+
+class AnchorRisk(str, Enum):
+    """Anchor placement risk level."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class DataConfidence(str, Enum):
+    """Confidence level in extracted data."""
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class PageArchetype(str, Enum):
+    """SERP page type classification."""
+    GUIDE = "guide"
+    COMPARISON = "comparison"
+    CATEGORY = "category"
+    PRODUCT = "product"
+    REVIEW = "review"
+    TOOL = "tool"
+    FAQ = "faq"
+    NEWS = "news"
+    OFFICIAL = "official"
+    OTHER = "other"
+
+
+# ============================================================================
 # INPUT MODELS
 # ============================================================================
 
@@ -123,11 +196,174 @@ class SERPProfile(BaseModel):
     lsi_keywords: List[str] = Field(default_factory=list)
 
 
+# ============================================================================
+# HEAVY PREFLIGHT EXTENSION MODELS (v2.0)
+# ============================================================================
+
+class IntentAlignment(BaseModel):
+    """Intent alignment between different components."""
+    anchor_vs_serp: AlignmentStatus = AlignmentStatus.ALIGNED
+    target_vs_serp: AlignmentStatus = AlignmentStatus.ALIGNED
+    publisher_vs_serp: AlignmentStatus = AlignmentStatus.ALIGNED
+    overall: AlignmentStatus = AlignmentStatus.ALIGNED
+
+
+class IntentExtension(BaseModel):
+    """Extended intent analysis for Heavy Preflight."""
+    serp_intent_primary: SERPIntent = Field(
+        ...,
+        description="Primary SERP intent from search results"
+    )
+    serp_intent_secondary: List[str] = Field(
+        default_factory=list,
+        description="Secondary intents detected"
+    )
+    target_page_intent: str = Field(
+        ...,
+        description="Intent derived from target page"
+    )
+    anchor_implied_intent: str = Field(
+        ...,
+        description="Intent implied by anchor text"
+    )
+    publisher_role_intent: str = Field(
+        ...,
+        description="Intent based on publisher's role"
+    )
+    intent_alignment: IntentAlignment = Field(
+        default_factory=IntentAlignment,
+        description="Alignment analysis between components"
+    )
+    recommended_bridge_type: BridgeType = Field(
+        ...,
+        description="Recommended bridge type based on intent"
+    )
+    recommended_article_angle: str = Field(
+        ...,
+        description="Recommended angle for the article"
+    )
+    required_subtopics: List[str] = Field(
+        default_factory=list,
+        description="Required subtopics from SERP analysis"
+    )
+    forbidden_angles: List[str] = Field(
+        default_factory=list,
+        description="Angles to avoid"
+    )
+    notes: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Additional notes and rationale"
+    )
+
+
+class SERPResultSample(BaseModel):
+    """Sample of a single SERP result."""
+    rank: int
+    url: str
+    title: str
+    detected_page_type: PageArchetype
+    snippet: Optional[str] = None
+    content_signals: List[str] = Field(default_factory=list)
+    key_entities: List[str] = Field(default_factory=list)
+    key_subtopics: List[str] = Field(default_factory=list)
+
+
+class SERPSet(BaseModel):
+    """SERP analysis for a single query."""
+    query: str
+    dominant_intent: SERPIntent
+    secondary_intents: List[str] = Field(default_factory=list)
+    page_archetypes: List[PageArchetype] = Field(default_factory=list)
+    required_subtopics: List[str] = Field(default_factory=list)
+    top_results_sample: List[SERPResultSample] = Field(default_factory=list)
+
+
+class SERPResearchExtension(BaseModel):
+    """Complete SERP research data."""
+    main_query: str
+    cluster_queries: List[str] = Field(default_factory=list)
+    queries_rationale: str
+    serp_sets: List[SERPSet] = Field(default_factory=list)
+    derived_links: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Links to intent_extension data"
+    )
+
+
+class AnchorSwap(BaseModel):
+    """Anchor text swap information."""
+    performed: bool = False
+    from_type: Optional[AnchorType] = None
+    to_type: Optional[AnchorType] = None
+    rationale: str = ""
+
+
+class NearWindow(BaseModel):
+    """LSI near-window configuration."""
+    unit: str = "sentence"
+    radius: int = 2
+    lsi_count: int = 0
+
+
+class Placement(BaseModel):
+    """Link placement details."""
+    paragraph_index_in_section: int = 0
+    offset_chars: int = 0
+    near_window: NearWindow = Field(default_factory=NearWindow)
+
+
+class TrustPolicy(BaseModel):
+    """Trust source policy information."""
+    level: TrustLevel
+    fallback_used: bool = False
+    unresolved: List[str] = Field(default_factory=list)
+
+
+class Compliance(BaseModel):
+    """Compliance and disclaimer information."""
+    disclaimers_injected: List[str] = Field(default_factory=list)
+
+
+class LinksExtension(BaseModel):
+    """Extended link metadata for Heavy Preflight."""
+    bridge_type: BridgeType
+    bridge_theme: Optional[str] = None
+    anchor_swap: AnchorSwap = Field(default_factory=AnchorSwap)
+    placement: Placement = Field(default_factory=Placement)
+    trust_policy: TrustPolicy
+    compliance: Compliance = Field(default_factory=Compliance)
+
+
+class ReadabilityMetrics(BaseModel):
+    """Readability measurements."""
+    lix: Optional[float] = None
+    target_range: str = "35–45"
+
+
+class NotesObservability(BaseModel):
+    """QC observability notes."""
+    signals_used: List[str] = Field(default_factory=list)
+    autofix_done: bool = False
+
+
+class QCExtension(BaseModel):
+    """Extended QC metadata."""
+    anchor_risk: AnchorRisk = AnchorRisk.LOW
+    readability: ReadabilityMetrics = Field(default_factory=ReadabilityMetrics)
+    thresholds_version: str = "A1"
+    notes_observability: NotesObservability = Field(default_factory=NotesObservability)
+
+
+# ============================================================================
+# UPDATED PREFLIGHT RESULT (with extensions)
+# ============================================================================
+
 class PreflightResult(BaseModel):
     """
     Complete output from the Preflight Engine.
 
     Contains all research data and the structured prompt for LLM generation.
+    Includes optional Heavy Preflight extensions.
     """
     publisher_profile: PublisherProfile
     target_profile: TargetProfile
@@ -146,6 +382,24 @@ class PreflightResult(BaseModel):
         description="Subtopics that should be covered"
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Heavy Preflight Extensions (v2.0) - Optional
+    intent_extension: Optional[IntentExtension] = Field(
+        default=None,
+        description="Intent analysis (Heavy mode only)"
+    )
+    serp_research_extension: Optional[SERPResearchExtension] = Field(
+        default=None,
+        description="SERP research data (Heavy mode only)"
+    )
+    links_extension: Optional[LinksExtension] = Field(
+        default=None,
+        description="Link strategy metadata (Heavy mode only)"
+    )
+    qc_extension: Optional[QCExtension] = Field(
+        default=None,
+        description="QC metadata (Heavy mode only)"
+    )
 
 
 # ============================================================================

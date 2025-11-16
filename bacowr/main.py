@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from bacowr.llm.client import LLMClient, LLMProvider
 from bacowr.preflight.light_preflight import LightPreflightEngine
+from bacowr.preflight.heavy_preflight import HeavyPreflightEngine
 from bacowr.storage.filesystem import FileSystemStorage
 from bacowr.qa.service import QAService
 from bacowr.services.orchestrator import JobOrchestrator
@@ -35,7 +36,8 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 _llm_client: Optional[LLMClient] = None
-_preflight_engine: Optional[LightPreflightEngine] = None
+_light_preflight: Optional[LightPreflightEngine] = None
+_heavy_preflight: Optional[HeavyPreflightEngine] = None
 _storage: Optional[FileSystemStorage] = None
 _qa_service: Optional[QAService] = None
 _orchestrator: Optional[JobOrchestrator] = None
@@ -89,29 +91,56 @@ def get_llm_client() -> LLMClient:
     return _llm_client
 
 
-def get_preflight_engine() -> LightPreflightEngine:
+def get_light_preflight() -> LightPreflightEngine:
     """
-    Get or create Preflight Engine instance.
+    Get or create Light Preflight Engine instance.
 
     Returns:
-        LightPreflightEngine: Configured preflight engine
+        LightPreflightEngine: Configured light preflight engine
     """
-    global _preflight_engine
+    global _light_preflight
 
-    if _preflight_engine is None:
+    if _light_preflight is None:
         timeout = int(os.getenv("PREFLIGHT_TIMEOUT", "30"))
         max_paragraphs = int(os.getenv("PREFLIGHT_MAX_PARAGRAPHS", "3"))
         user_agent = os.getenv("PREFLIGHT_USER_AGENT")
 
-        _preflight_engine = LightPreflightEngine(
+        _light_preflight = LightPreflightEngine(
             timeout=timeout,
             max_paragraphs=max_paragraphs,
             user_agent=user_agent,
         )
 
-        logger.info("Preflight engine initialized")
+        logger.info("Light preflight engine initialized")
 
-    return _preflight_engine
+    return _light_preflight
+
+
+def get_heavy_preflight() -> HeavyPreflightEngine:
+    """
+    Get or create Heavy Preflight Engine instance.
+
+    Returns:
+        HeavyPreflightEngine: Configured heavy preflight engine
+    """
+    global _heavy_preflight
+
+    if _heavy_preflight is None:
+        timeout = int(os.getenv("PREFLIGHT_TIMEOUT", "30"))
+        max_paragraphs = int(os.getenv("PREFLIGHT_MAX_PARAGRAPHS", "5"))
+        user_agent = os.getenv("PREFLIGHT_USER_AGENT")
+        serp_api_key = os.getenv("SERP_API_KEY")  # Optional for future
+
+        _heavy_preflight = HeavyPreflightEngine(
+            timeout=timeout,
+            max_paragraphs=max_paragraphs,
+            user_agent=user_agent,
+            serp_api_key=serp_api_key,
+        )
+
+        logger.info("Heavy preflight engine initialized")
+
+    return _heavy_preflight
 
 
 def get_storage() -> FileSystemStorage:
@@ -164,18 +193,20 @@ def get_orchestrator() -> JobOrchestrator:
     if _orchestrator is None:
         # Initialize all dependencies
         llm_client = get_llm_client()
-        preflight_engine = get_preflight_engine()
+        light_preflight = get_light_preflight()
+        heavy_preflight = get_heavy_preflight()
         storage = get_storage()
         qa_service = get_qa_service()
 
         _orchestrator = JobOrchestrator(
-            preflight_engine=preflight_engine,
+            light_preflight=light_preflight,
+            heavy_preflight=heavy_preflight,
             llm_client=llm_client,
             storage=storage,
             qa_service=qa_service,
         )
 
-        logger.info("Job orchestrator initialized with all dependencies")
+        logger.info("Job orchestrator initialized with all dependencies (light + heavy preflight)")
 
     return _orchestrator
 
@@ -219,9 +250,10 @@ def shutdown_app() -> None:
     logger.info("Shutting down BACOWR application...")
 
     # Reset singleton instances
-    global _llm_client, _preflight_engine, _storage, _qa_service, _orchestrator
+    global _llm_client, _light_preflight, _heavy_preflight, _storage, _qa_service, _orchestrator
     _llm_client = None
-    _preflight_engine = None
+    _light_preflight = None
+    _heavy_preflight = None
     _storage = None
     _qa_service = None
     _orchestrator = None
